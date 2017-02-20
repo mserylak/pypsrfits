@@ -1,179 +1,167 @@
-#! /usr/bin/env python
+#!/usr/bin/env python
 
-# Simple code to read search-mode PSRFITS data arrays into python
-
-import fitsio
-import numpy
+# Copyright (C) 2017 by Paul Demorest and Maciej Serylak
+# Licensed under the Academic Free License version 3.0
+# This program comes with ABSOLUTELY NO WARRANTY.
+# You are free to modify and redistribute this code as long
+# as you do not remove the above attribution and reasonably
+# inform recipients that you have modified the original work.
 
 class PSRFITS:
-    def __init__(self, fname=None):
-        self.fits = None
-        if fname != None:
-            self.open(fname)
+  def __init__(self, fileName = None):
+    self.fits = None
+    if fileName != None:
+      self.open(fileName)
 
-    def open(self,fname):
-        """Open the specified PSRFITS file.  A fitsio object is
-        created and stored as self.fits.  For convenience, the
-        main header is stored as self.hdr, and the SUBINT header
-        as self.subhdr."""
-        self.fits = fitsio.FITS(fname,'r')
-        self.hdr = self.fits[0].read_header()
-        self.subhdr = self.fits['SUBINT'].read_header()
+  def open(self, fileName):
+    """Open the specified PSRFITS file. A pyfits object is
+    created and stored as self.fits. For convenience, the
+    primary HDU table header is stored as self.hdr, and
+    the subint HDU table header as self.subintHdr."""
+    self.fits = pyfits.open(fileName, memmap = True, mode = "readonly", save_backup = False)
+    self.hdr = self.fits[0].header
+    self.subintHdr = self.fits["SUBINT"].header
 
-    def get_freqs(self,row=0):
-        """Return the frequency array from the specified subint."""
-        return self.fits['SUBINT']['DAT_FREQ'][row]
+  def getFreqs(self, row = 0):
+    """Return the frequency array from the specified subint."""
+    return self.fits["SUBINT"].data["DAT_FREQ"][row]
 
-    def get_data(self, start_row=0, end_row=None, 
-            downsamp=1, fdownsamp=1, apply_scales=True,
-            get_ft=False,squeeze=False):
-        """Read the data from the specified rows and return it as a
-        single array.  Dimensions are [time, poln, chan].
+  def getData(self, startRow = 0, endRow = None, downSamp = 1, freqDownSamp = 1, applyScales = True, getFT = False, squeeze = False):
+    """Read the data from the specified rows and return it as a
+    single array with [time, poln, chan] dimensions.
+    Options:
+      startRow: first subint read (0-based index)
+      endRow: final subint to read. None implies endRow = startRow.
+              Negative values imply offset from the end, i.e.
+              getData(0,-1) would read the entire file. (Don't forget
+              that PSRFITS files are often huge so this might be a bad idea).
+      downSamp: downsample the data in time as they are being read in.
+                The downsample factor should evenly divide the number
+                of spectra per row. downSamp = 0 means integrate each
+                row completely.
+      freqDownSamp: downsample the data in frequency as they are being read in.
+                    The downsample factor should evenly divide the number
+                    of channels.
+      applyScales: set to False to avoid applying the scale/offset
+                   data stored in the file.
+      getFT: if True return time and frequency arrays as well.
+      squeeze: if True, "squeeze" the data array (remove len-1
+               dimensions).
+    Notes: Only 8, 16, and 32 bit data are currently understood."""
 
-        options:
-          start_row: first subint read (0-based index)
+    # Check if the mode of observations is correct.
+    if self.hdr["OBS_MODE"].strip() != "SEARCH":
+      raise RuntimeError("getData() only works on SEARCH-mode PSRFITS")
 
-          end_row: final subint to read.  None implies end_row=start_row.
-            Negative values imply offset from the end, i.e.
-            get_data(0,-1) would read the entire file.  (Don't forget 
-            that PSRFITS files are often huge so this might be a bad idea).
+    # Get header parameters.
+    nSampBlk = self.subintHdr["NSBLK"]
+    nPol = self.subintHdr["NPOL"]
+    nChan = self.subintHdr["NCHAN"]
+    nBit = self.subintHdr["NBITS"]
+    tBin = self.subintHdr["TBIN"]
+    polType = self.subintHdr["POL_TYPE"]
+    nRowsFile = self.subintHdr["NAXIS2"]
+    #print "nSampBlk:", nSampBlk
+    #print "nPol:", nPol
+    #print "nChan:", nChan
+    #print "nBit:", nBit
+    #print "tBin:", tBin
+    #print "polType:", polType
+    #print "nRowsFile:", nRowsFile
 
-          downsamp: downsample the data in time as they are being read in.
-            The downsample factor should evenly divide the number of spectra
-            per row.  downsamp=0 means integrate each row completely.
+    # Check if down sampling in time and frequency is enabled.
+    if downSamp == 0:
+      downSamp = nSampBlk
+    if downSamp > nSampBlk:
+      downSamp = nSampBlk
+    if freqDownSamp == 0:
+      freqDownSamp = nChan
+    if freqDownSamp > nChan:
+      freqDownSamp = nChan
+    if endRow == None:
+      endRow = startRow
+    if endRow < 0:
+      endRow = nRowsFile + endRow
+    if nSampBlk % downSamp > 0:
+      raise RuntimeError("downSamp does not evenly divide NSBLK (%d)." % nSampBlk)
+    if nChan % freqDownSamp > 0:
+      raise RuntimeError("freqDownSamp does not evenly divide NCHAN (%d)." % nChan)
 
-          fdownsamp: downsample the data in freq as they are being read in.
-            The downsample factor should evenly divide the number of channels.
+    nRowsTotal = endRow - startRow + 1
+    downNSampBlk = nSampBlk / downSamp
+    downNChan = nChan / freqDownSamp
+    downTBin = tBin * downSamp
 
-          apply_scales: set to False to avoid applying the scale/offset
-            data stored in the file.
+    # Data types of the signed and unsigned.
+    if nBit == 8:
+      signedType = numpy.int8
+      unsignedType = numpy.uint8
+    elif nBit == 16:
+      signedType = numpy.int16
+      unsignedType = numpy.uint16
+    elif nBit == 32:
+      signedType = numpy.float32
+      unsignedType = numpy.float32
+    else:
+      raise RuntimeError("Not handled number of NBITS (%d)." % nBit)
 
-          get_ft: if True return time and freq arrays as well.
+    # Allocate arrays.
+    rowSpectrumResult = numpy.zeros(nChan, dtype = numpy.float32)
+    finalSpectrum = numpy.zeros((nRowsTotal * downNSampBlk, nPol, downNChan), dtype = numpy.float32)
+    if getFT:
+      finalFreqs = numpy.zeros(downNChan)
+      finalTiming = numpy.zeros(nRowsTotal * downNSampBlk)
 
-          squeeze: if True, "squeeze" the data array (remove len-1 
-            dimensions).
+    polSign = 1
+    if "AABB" in polType:
+      polSign = 2
 
-        Notes:
-          - Only 8, 16, and 32 bit data are currently understood
-        """
+    for iRow in range(nRowsTotal):
+      if applyScales:
+        offsets = self.fits["SUBINT"].data["DAT_OFFS"][iRow + startRow]
+        scales = self.fits["SUBINT"].data["DAT_SCL"][iRow + startRow]
+        offsets = offsets.reshape((nPol, nChan))
+        scales = scales.reshape((nPol, nChan))
+      if getFT:
+        rowTiming = self.fits["SUBINT"].data["OFFS_SUB"][iRow + startRow] - (self.fits["SUBINT"].data["TSUBINT"][iRow + startRow] / 2.0)
+        freqs_row = self.fits["SUBINT"].data["DAT_FREQ"][iRow + startRow]
+      rowData = self.fits["SUBINT"].data["DATA"][iRow + startRow]
 
-        if self.hdr['OBS_MODE'].strip() != 'SEARCH':
-            raise RuntimeError("get_data() only works on SEARCH-mode PSRFITS")
+      # Fix up the data type.
+      if (nBit == 16):
+        rowData = numpy.fromstring(rowData.tostring(), dtype = numpy.int16)
+        rowData = rowData.reshape((nSampBlk, nPol, nChan))
 
-        nsblk = self.subhdr['NSBLK']
-        npol = self.subhdr['NPOL']
-        nchan = self.subhdr['NCHAN']
-        nbit = self.subhdr['NBITS']
-        tbin = self.subhdr['TBIN']
-        poltype = self.subhdr['POL_TYPE']
-        nrows_file = self.subhdr['NAXIS2']
+      # Iterate over rows and polarisations.
+      for iSamp in range(downNSampBlk):
+        for iPol in range(nPol):
+          if iPol < polSign:
+            dataType = unsignedType
+          else:
+            dataType = signedType
 
-        if downsamp == 0:
-            downsamp = nsblk
+          rowSpectrumResult = rowData[iSamp * downSamp:(iSamp + 1) * downSamp, iPol, :].astype(dataType).mean(0)
 
-        if downsamp > nsblk:
-            downsamp = nsblk
+          if getFT:
+            finalTiming[iRow * downNSampBlk + iSamp] = rowTiming + (iSamp + 0.5) * downTBin
 
-        if fdownsamp == 0:
-            downsamp = nchan
+          if applyScales:
+            rowSpectrumResult *= scales[iPol, :]
+            rowSpectrumResult += offsets[iPol, :]
 
-        if fdownsamp > nchan:
-            fdownsamp = nchan
+          if freqDownSamp == 1:
+            finalSpectrum[iRow * downNSampBlk + iSamp, iPol, :] = rowSpectrumResult
+            # Assume frequencies do not change.
+            if getFT:
+              finalFreqs[:] = freqs_row[:]
+          else:
+            finalSpectrum[iRow * downNSampBlk + iSamp, iPol, :] = rowSpectrumResult.reshape((-1, freqDownSamp)).mean(1)
+            if getFT:
+              finalFreqs[:] = freqs_row.reshape((-1, freqDownSamp)).mean(1)
 
-        if end_row==None:
-            end_row = start_row
-
-        if end_row<0:
-            end_row = nrows_file + end_row
-
-        if nsblk % downsamp > 0:
-            print "Warning: downsamp does not evenly divide NSBLK."
-
-        if nchan % fdownsamp > 0:
-            print "Warning: fdownsamp does not evenly divide NCHAN."
-
-        nrows_tot = end_row - start_row + 1
-        nsblk_ds = nsblk / downsamp
-        nchan_ds = nchan / fdownsamp
-        tbin_ds = tbin * downsamp
-
-        # Data types of the signed and unsigned
-        if nbit==8:
-            s_t = numpy.int8
-            u_t = numpy.uint8
-        elif nbit==16:
-            s_t = numpy.int16
-            u_t = numpy.uint16
-        elif nbit==32:
-            s_t = numpy.float32
-            u_t = numpy.float32
-        else:
-            raise RuntimeError("Unhandled number of bits (%d)" % nbit)
-
-        # allocate the result array
-        sampresult = numpy.zeros(nchan, dtype=numpy.float32)
-        result = numpy.zeros((nrows_tot * nsblk_ds, npol, nchan_ds),
-                dtype=numpy.float32)
-        if get_ft:
-            freqs = numpy.zeros(nchan_ds)
-            times = numpy.zeros(nrows_tot*nsblk_ds)
-
-        signpol = 1
-        if 'AABB' in poltype:
-            signpol = 2
-
-        for irow in range(nrows_tot):
-
-            if apply_scales:
-                offsets = self.fits['SUBINT']['DAT_OFFS'][irow+start_row]
-                scales = self.fits['SUBINT']['DAT_SCL'][irow+start_row]
-                scales = scales.reshape((npol,nchan))
-                offsets = offsets.reshape((npol,nchan))
-            
-            if get_ft:
-                t0_row = self.fits['SUBINT']['OFFS_SUB'][irow+start_row] \
-                        - self.fits['SUBINT']['TSUBINT'][irow+start_row]/2.0
-                freqs_row = self.fits['SUBINT']['DAT_FREQ'][irow+start_row]
-
-            dtmp = self.fits['SUBINT']['DATA'][irow+start_row]
-
-            # Fix up the data type
-            if (nbit==16):
-                dtmp = numpy.fromstring(dtmp.tostring(),dtype=numpy.int16)
-                dtmp = dtmp.reshape((nsblk,npol,nchan,1))
-
-            for isamp in range(nsblk_ds):
-                for ipol in range(npol):
-                    if ipol<signpol: 
-                        t = u_t
-                    else: 
-                        t = s_t
-
-                    sampresult = dtmp[isamp*downsamp:(isamp+1)*downsamp,
-                            ipol,:,0].astype(t).mean(0)
-
-                    if get_ft: 
-                        times[irow*nsblk_ds+isamp] = t0_row \
-                                + (isamp+0.5)*tbin_ds
-
-                    if apply_scales:
-                        sampresult *= scales[ipol,:]
-                        sampresult += offsets[ipol,:]
-
-                    if fdownsamp==1:
-                        result[irow*nsblk_ds+isamp,ipol,:] = sampresult
-                        # Assumes freqs don't change:
-                        if get_ft: freqs[:] = freqs_row[:]
-                    else:
-                        result[irow*nsblk_ds+isamp,ipol,:] = \
-                                sampresult.reshape((-1,fdownsamp)).mean(1)
-                        if get_ft: 
-                            freqs[:] = freqs_row.reshape((-1,fdownsamp)).mean(1)
-
-        if squeeze: result = result.squeeze()
-
-        if get_ft:
-            return (result, times, freqs)
-        else:
-            return result
-
+    if squeeze:
+      finalSpectrum = finalSpectrum.squeeze()
+    if getFT:
+      return (finalSpectrum, finalTiming, finalFreqs)
+    else:
+      return finalSpectrum

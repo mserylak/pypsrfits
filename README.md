@@ -14,6 +14,7 @@ The module requires the pyfits and numpy python modules.
 Importing and loading data file into the pyfits object:
 
 `import pypsrfits`
+
 `f = pypsrfits.PSRFITS("my_file.fits")`
 
 The full pyfits object for the file is available:

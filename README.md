@@ -1,6 +1,6 @@
 # Introduction
 
-This code is authored by Paul Demorest. The original code can be found in https://github.com/demorest/pypsrfits
+The original code is authored by Paul Demorest and can be found in https://github.com/demorest/pypsrfits
 
 pypsrfits is a very simple python module for reading search-mode PSRFITS data
 into numpy array.

@@ -14,7 +14,7 @@ The module requires the pyfits and numpy python modules.
 Importing and loading data file into the pyfits object:
 
 `import pypsrfits`
-`f = pypsrfits.PSRFITS('my_file.fits')`
+`f = pypsrfits.PSRFITS("my_file.fits")`
 
 The full pyfits object for the file is available:
 
@@ -32,4 +32,4 @@ To read all of the data from row 13:
 Read all data in entire file, downsampling in time by
 a factor of 256
 
-`d = f.getData(0,-1,downSamp = 256)`
+`d = f.getData(0, -1, downSamp = 256)`

@@ -24,6 +24,7 @@ The full pyfits object for the file is available:
 The main header and SUBINT header are also accessible:
 
 `f.hdr`
+
 `f.subintHdr`
 
 To read all of the data from row 13:

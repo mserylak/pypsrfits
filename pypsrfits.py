@@ -7,6 +7,9 @@
 # as you do not remove the above attribution and reasonably
 # inform recipients that you have modified the original work.
 
+import numpy
+import pyfits
+
 class PSRFITS:
   def __init__(self, fileName = None):
     self.fits = None

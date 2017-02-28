@@ -22,4 +22,4 @@ setup(name="pypsrfits",
       platforms=["OS Independent"],
       keywords="pulsar psrfits meerkat ska",
       zip_safe=False,
-      install_requires=['numpy', 'pyfits'])
+      install_requires=['numpy', 'astropy'])

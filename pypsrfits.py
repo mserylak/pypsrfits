@@ -64,13 +64,13 @@ class PSRFITS:
     tBin = self.subintHdr["TBIN"]
     polType = self.subintHdr["POL_TYPE"]
     nRowsFile = self.subintHdr["NAXIS2"]
-    print "nSampBlk:", nSampBlk
-    print "nPol:", nPol
-    print "nChan:", nChan
-    print "nBit:", nBit
-    print "tBin:", tBin
-    print "polType:", polType
-    print "nRowsFile:", nRowsFile
+    #print "nSampBlk:", nSampBlk
+    #print "nPol:", nPol
+    #print "nChan:", nChan
+    #print "nBit:", nBit
+    #print "tBin:", tBin
+    #print "polType:", polType
+    #print "nRowsFile:", nRowsFile
 
     # Check if down sampling in time and frequency is enabled.
     if downSamp == 0:
@@ -94,10 +94,10 @@ class PSRFITS:
     downNSampBlk = nSampBlk / downSamp
     downNChan = nChan / freqDownSamp
     downTBin = tBin * downSamp
-    print "nRowsTotal", nRowsTotal
-    print "downNSampBlk", downNSampBlk
-    print "downNChan", downNChan
-    print "downTBin", downTBin
+    #print "nRowsTotal", nRowsTotal
+    #print "downNSampBlk", downNSampBlk
+    #print "downNChan", downNChan
+    #print "downTBin", downTBin
 
     # Data types of the signed and unsigned.
     if nBit == 8:

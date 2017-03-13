@@ -118,47 +118,49 @@ class PSRFITS:
     if getFT:
       finalFreqs = numpy.zeros(downNChan)
       finalTiming = numpy.zeros(nRowsTotal * downNSampBlk)
-
     polSign = 1
     if "AABB" in polType:
       polSign = 2
 
+    # Iterate over rows (blocks).
     for iRow in range(nRowsTotal):
       if applyScales:
         offsets = self.fits["SUBINT"].data["DAT_OFFS"][iRow + startRow]
         scales = self.fits["SUBINT"].data["DAT_SCL"][iRow + startRow]
+        weights = self.fits["SUBINT"].data["DAT_WTS"][iRow + startRow]
         offsets = offsets.reshape((nPol, nChan))
         scales = scales.reshape((nPol, nChan))
+        #weights = numpy.concatenate((weights, weights,weights, weights))
+        #weights = weights.reshape((nPol, nChan))
       if getFT:
         rowTiming = self.fits["SUBINT"].data["OFFS_SUB"][iRow + startRow] - (self.fits["SUBINT"].data["TSUBINT"][iRow + startRow] / 2.0)
         freqs_row = self.fits["SUBINT"].data["DAT_FREQ"][iRow + startRow]
       rowData = self.fits["SUBINT"].data["DATA"][iRow + startRow]
+      #print "rowData", rowData.shape
+      #print "offets", offsets.shape
+      #print "scales", scales.shape
+      #print "weights", weights.shape
 
-      # Fix up the data type.
+      # Decode rowDAta for 16 bit data type file.
       if (nBit == 16):
         rowData = numpy.fromstring(rowData.tostring(), dtype = numpy.int16)
         rowData = rowData.reshape((nSampBlk, nPol, nChan))
 
-      # Iterate over rows and polarisations.
+      # Iterate over samples and polarisations.
       for iSamp in range(downNSampBlk):
         for iPol in range(nPol):
           if iPol < polSign:
             dataType = unsignedType
           else:
             dataType = signedType
-
           rowSpectrumResult = rowData[iSamp * downSamp:(iSamp + 1) * downSamp, iPol, :].astype(dataType).mean(0)
-
           if getFT:
             finalTiming[iRow * downNSampBlk + iSamp] = rowTiming + (iSamp + 0.5) * downTBin
-
           if applyScales:
             rowSpectrumResult *= scales[iPol, :]
             rowSpectrumResult += offsets[iPol, :]
-
           if freqDownSamp == 1:
             finalSpectrum[iRow * downNSampBlk + iSamp, iPol, :] = rowSpectrumResult
-            # Assume frequencies do not change.
             if getFT:
               finalFreqs[:] = freqs_row[:]
           else:

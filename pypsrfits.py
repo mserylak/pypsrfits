@@ -159,6 +159,7 @@ class PSRFITS:
           if applyScales:
             rowSpectrumResult *= scales[iPol, :]
             rowSpectrumResult += offsets[iPol, :]
+            rowSpectrumResult *= weights[iPol, :]
           if freqDownSamp == 1:
             finalSpectrum[iRow * downNSampBlk + iSamp, iPol, :] = rowSpectrumResult
             if getFT:
